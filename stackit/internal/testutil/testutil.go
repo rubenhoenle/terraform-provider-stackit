@@ -76,9 +76,100 @@ var (
 	ServerUpdateCustomEndpoint    = os.Getenv("TF_ACC_SERVER_UPDATE_CUSTOM_ENDPOINT")
 	ServiceAccountCustomEndpoint  = os.Getenv("TF_ACC_SERVICE_ACCOUNT_CUSTOM_ENDPOINT")
 	SKECustomEndpoint             = os.Getenv("TF_ACC_SKE_CUSTOM_ENDPOINT")
+
+	customEndpointMappings = map[string]string{
+		"TF_ACC_CDN_CUSTOM_ENDPOINT":             "cdn_custom_endpoint",
+		"TF_ACC_DNS_CUSTOM_ENDPOINT":             "dns_custom_endpoint",
+		"TF_ACC_GIT_CUSTOM_ENDPOINT":             "git_custom_endpoint",
+		"TF_ACC_IAAS_CUSTOM_ENDPOINT":            "iaas_custom_endpoint",
+		"TF_ACC_LOADBALANCER_CUSTOM_ENDPOINT":    "loadbalancer_custom_endpoint",
+		"TF_ACC_LOGME_CUSTOM_ENDPOINT":           "logme_custom_endpoint",
+		"TF_ACC_MARIADB_CUSTOM_ENDPOINT":         "mariadb_custom_endpoint",
+		"TF_ACC_MODELSERVING_CUSTOM_ENDPOINT":    "modelserving_custom_endpoint",
+		"TF_ACC_authorization_custom_endpoint":   "authorization_custom_endpoint",
+		"TF_ACC_MONGODBFLEX_CUSTOM_ENDPOINT":     "mongodbflex_custom_endpoint",
+		"TF_ACC_OPENSEARCH_CUSTOM_ENDPOINT":      "opensearch_custom_endpoint",
+		"TF_ACC_OBSERVABILITY_CUSTOM_ENDPOINT":   "observability_custom_endpoint",
+		"TF_ACC_OBJECTSTORAGE_CUSTOM_ENDPOINT":   "objectstorage_custom_endpoint",
+		"TF_ACC_POSTGRESFLEX_CUSTOM_ENDPOINT":    "postgresflex_custom_endpoint",
+		"TF_ACC_RABBITMQ_CUSTOM_ENDPOINT":        "rabbitmq_custom_endpoint",
+		"TF_ACC_REDIS_CUSTOM_ENDPOINT":           "redis_custom_endpoint",
+		"TF_ACC_RESOURCEMANAGER_CUSTOM_ENDPOINT": "resourcemanager_custom_endpoint",
+		"TF_ACC_SECRETSMANAGER_CUSTOM_ENDPOINT":  "secretsmanager_custom_endpoint",
+		"TF_ACC_SQLSERVERFLEX_CUSTOM_ENDPOINT":   "sqlserverflex_custom_endpoint",
+		"TF_ACC_SERVER_BACKUP_CUSTOM_ENDPOINT":   "server_backup_custom_endpoint",
+		"TF_ACC_SERVER_UPDATE_CUSTOM_ENDPOINT":   "server_update_custom_endpoint",
+		"TF_ACC_SERVICE_ACCOUNT_CUSTOM_ENDPOINT": "service_account_custom_endpoint",
+		"TF_ACC_SKE_CUSTOM_ENDPOINT":             "ske_custom_endpoint",
+	}
 )
 
 // Provider config helper functions
+
+type ProviderConfigBuilder struct {
+	defaultRegion       string
+	enableBetaResources bool
+	enabledExperiments  []string
+}
+
+func newProviderConfigBuilder() *ProviderConfigBuilder {
+	return &ProviderConfigBuilder{}
+}
+
+func (b *ProviderConfigBuilder) DefaultRegion(value string) *ProviderConfigBuilder {
+	b.defaultRegion = value
+	return b
+}
+
+func (b *ProviderConfigBuilder) EnableBetaResources() *ProviderConfigBuilder {
+	b.enableBetaResources = true
+	return b
+}
+
+func (b *ProviderConfigBuilder) EnableExperiment(experimentId string) *ProviderConfigBuilder {
+	b.enabledExperiments = append(b.enabledExperiments, experimentId)
+	return b
+}
+
+func (b *ProviderConfigBuilder) Build() string {
+	defaultRegion := "eu01"
+	if b.defaultRegion != "" {
+		defaultRegion = b.defaultRegion
+	}
+
+	var sb strings.Builder
+	sb.WriteString("provider \"stackit\" {\n")
+	sb.WriteString(fmt.Sprintf("\tdefault_region = %q\n", defaultRegion))
+
+	// beta resources
+	if b.enableBetaResources {
+		sb.WriteString(fmt.Sprintf("\tenable_beta_resources = %t\n", b.enableBetaResources))
+	}
+
+	// experiments
+	if len(b.enabledExperiments) > 0 {
+		sb.WriteString("\texperiments = [ ")
+		for idx, experiment := range b.enabledExperiments {
+			if idx >= len(b.enabledExperiments)-1 {
+				sb.WriteString(fmt.Sprintf("%q", experiment))
+				break
+			}
+			sb.WriteString(fmt.Sprintf("%q, ", experiment))
+		}
+		sb.WriteString(" ]\n")
+	}
+
+	// custom endpoints
+	for envVar, providerField := range customEndpointMappings {
+		value := os.Getenv(envVar)
+		if value != "" {
+			sb.WriteString(fmt.Sprintf("\t%s = %q\n", providerField, value))
+		}
+	}
+
+	sb.WriteString("}")
+	return sb.String()
+}
 
 func ObservabilityProviderConfig() string {
 	if ObservabilityCustomEndpoint == "" {
@@ -93,6 +184,7 @@ func ObservabilityProviderConfig() string {
 		ObservabilityCustomEndpoint,
 	)
 }
+
 func CdnProviderConfig() string {
 	if CdnCustomEndpoint == "" {
 		return `
